@@ -1,0 +1,7 @@
+{
+  "dependencies": [
+    "libpqxx",
+    "spdlog",
+    "cryptopp"
+  ]
+}

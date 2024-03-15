@@ -30,3 +30,10 @@
 *.exe
 *.out
 *.app
+
+# Log files
+*.log
+
+# CMake build directory
+CMakeFiles
+src/teme/tema1/build/tema1
