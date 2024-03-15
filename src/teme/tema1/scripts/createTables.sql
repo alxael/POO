@@ -1,3 +1,9 @@
+CREATE TABLE IF NOT EXISTS Currencies (
+    id int NOT NULL PRIMARY KEY,
+    name varchar(255) NOT NULL,
+    code varchar(255) NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS Countries (
     id int NOT NULL PRIMARY KEY,
     name varchar(255) NOT NULL,
@@ -16,7 +22,7 @@ CREATE TABLE IF NOT EXISTS Users (
 
 CREATE TABLE IF NOT EXISTS Accounts (
     id int NOT NULL PRIMARY KEY,
-    country int references Countries(id),
+    currency int references Currencies(id),
     "user" int references Users(id),
     iban varchar(255) NOT NULL UNIQUE,
     amount double precision NOT NULL,

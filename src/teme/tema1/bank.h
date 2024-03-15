@@ -18,6 +18,24 @@ using namespace CryptoPP;
 
 namespace bank
 {
+    class Currency
+    {
+    private:
+        string name;
+        string code;
+
+    public:
+        Currency(string name, string code) : name(name), code(code) {}
+        Currency() {}
+        ~Currency() {}
+
+        string getName() const { return name; }
+        void setName(string name) { name = name; }
+
+        string getCode() const { return code; }
+        void setCode(string code) { code = code; }
+    };
+
     class Country
     {
     private:
@@ -99,13 +117,13 @@ namespace bank
         Country() {}
         ~Country() {}
 
-        string getName() { return name; }
+        string getName() const { return name; }
         void setName(string name) { name = name; }
 
-        string getCode() { return code; }
+        string getCode() const { return code; }
         void setCode(string code) { code = code; }
 
-        string getIBANPattern() { return IBANPattern; }
+        string getIBANPattern() const { return IBANPattern; }
         void setIBANPattern(string IBANPattern) { IBANPattern = IBANPattern; }
 
         friend ostream &operator<<(ostream &out, const Country &country)
@@ -249,32 +267,32 @@ namespace bank
         User() {}
         ~User() {}
 
-        string getPassword() { return password; }
+        string getPassword() const { return password; }
         void setPassword(string password) { password = password; }
 
-        string getEmail() { return email; }
+        string getEmail() const { return email; }
         void setEmail(string email) { email = email; }
 
-        string getFullName() { return firstName + " " + lastName; }
+        string getFullName() const { return firstName + " " + lastName; }
         void setFirstName(string firstName) { firstName = firstName; }
         void setFullName(string lastName) { lastName = lastName; }
 
+        Country getCountry() const { return country; }
+        void setCountry(Country country) { country = country; }
+
         friend ostream &operator<<(ostream &out, const User &user)
         {
-            string header = "User information:";
             string emailOutput = "Email: " + user.email;
-            string firstNameOutput = "First name: " + user.firstName;
-            string lastNameOutput = "Last name: " + user.lastName;
+            string nameOutput = "Full name: " + user.getFullName();
+            string countryOutput = "Country: " + user.country.getName();
             string passwordOutput = "Password (hashed): " + user.password;
-            out << header << endl
-                << emailOutput << endl
-                << firstNameOutput << endl
-                << lastNameOutput << endl
+            out << emailOutput << endl
+                << nameOutput << endl
+                << countryOutput << endl
                 << passwordOutput << endl;
-            info(header);
             info(emailOutput);
-            info(firstNameOutput);
-            info(lastNameOutput);
+            info(nameOutput);
+            info(countryOutput);
             info(passwordOutput);
             return out;
         }
@@ -286,6 +304,8 @@ namespace bank
             lastName = other.lastName;
             password = other.password;
         }
+        bool operator==(const User &other) { return (other.email == email); }
+        bool operator!=(const User &other) { return (other.email != email); }
 
         bool authenticate(string passwordNotHashed)
         {
@@ -297,7 +317,7 @@ namespace bank
     class Account
     {
     private:
-        Country country;
+        Currency currency;
         User user;
         string IBAN;
         double amount;
@@ -305,16 +325,48 @@ namespace bank
         string firstName, lastName;
 
     public:
-        Account(Country country, User user, string IBAN, double amount, string firstName, string lastName) : country(country), user(user), IBAN(IBAN), amount(amount), firstName(firstName), lastName(lastName) {}
-        Account(Country country, User user, string firstName, string lastName) : country(country), user(user), firstName(firstName), lastName(lastName)
+        // used for instantiating an existing account
+        Account(Currency currency, User user, string IBAN, double amount, string firstName, string lastName) : currency(currency), user(user), IBAN(IBAN), amount(amount), firstName(firstName), lastName(lastName) {}
+        // used for creating a new account
+        Account(Currency currency, User user, string firstName, string lastName) : currency(currency), user(user), firstName(firstName), lastName(lastName)
         {
-            IBAN = country.generateIBAN();
+            IBAN = user.getCountry().generateIBAN();
             amount = 0;
         }
         ~Account() {}
 
+        double getAmount() const { return amount; }
         void setAmount(double amount) { amount = amount; }
-        double getAmount() { return amount; }
+
+        string getIBAN() const { return IBAN; }
+        void setIBAN(string IBAN) { IBAN = IBAN; }
+
+        User getUser() const { return user; }
+        void setUser(User user) { user = user; }
+
+        Currency getCurrency() const { return currency; }
+        void setCurrency(Currency currency) { currency = currency; }
+
+        string getFullName() const { return firstName + " " + lastName; }
+        void setFirstName(string firstName) { firstName = firstName; }
+        void setLastName(string lastName) { lastName = lastName; }
+
+        friend ostream &operator<<(ostream &out, const Account &account)
+        {
+            string IBANOutput = "IBAN: " + account.IBAN;
+            string amountOutput = "Amount: " + to_string(account.amount);
+            string currencyOutput = "Currency: " + account.currency.getCode();
+            string nameOutput = "Holder full name: " + account.getFullName();
+            cout << IBANOutput << endl
+                 << amountOutput << endl
+                 << currencyOutput << endl
+                 << nameOutput << endl;
+            info(IBANOutput);
+            info(amountOutput);
+            info(currencyOutput);
+            info(nameOutput);
+            return out;
+        }
     };
 
     class Transaction

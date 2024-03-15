@@ -39,8 +39,10 @@ int main(int argc, char *argv[])
     manager.executeQuery("scripts/initializeDatabase.sql");
 
     // load data
+    manager.loadCurrencies();
     manager.loadCountries();
     manager.loadUsers();
+    manager.loadAccounts();
 
     // available commands
     string generalHeader = "General commands:";
@@ -60,14 +62,21 @@ int main(int argc, char *argv[])
     string logout = "logout";
     string logoutMessage = "*[" + logout + "] - log out of your account";
     string deleteUser = "delete";
-    string deleteUserMessage = "*[" + deleteUser + "*] - delete your account";
-    string infoUser = "infouser";
-    string infoUserMessage = "*[" + infoUser + "*] - get you account's information";
+    string deleteUserMessage = "*[" + deleteUser + "] - delete your account";
+    string infoUser = "info-user";
+    string infoUserMessage = "*[" + infoUser + "] - get you account's information";
     vector<string> authenticationCommands{authenticationHeader, signupMessage, loginMessage, logoutMessage, deleteUserMessage, infoUserMessage};
 
     string accountsHeader = "Account-related commands:";
+    string addAccount = "add-account";
+    string addAccountMessage = "*[" + addAccount + "] - create a new account";
+    string deleteAccount = "delete-account";
+    string deleteAccountMessage = "*[" + deleteAccount + "] - delete account";
+    string viewAccounts = "view-accounts";
+    string viewAccountsMessage = "*[" + viewAccounts + "] - view all bank accounts associated with your account";
+    vector<string> accountCommands{accountsHeader, addAccountMessage, deleteAccountMessage, viewAccountsMessage};
 
-    vector<vector<string>> commandSections{generalCommands, authenticationCommands};
+    vector<vector<string>> commandSections{generalCommands, authenticationCommands, accountCommands};
 
     // prompt user with welcome message
     cout << "Welcome to Useless Bank! You can view the available commands by typing 'help' below." << endl;
@@ -100,6 +109,7 @@ int main(int argc, char *argv[])
             cout << "Enter your commands below." << endl;
             continue;
         }
+
         if (!input.compare(signup))
         {
             try
@@ -114,7 +124,7 @@ int main(int argc, char *argv[])
                 cout << "Please enter your password: ";
                 getline(cin, password);
 
-                vector<pair<string, string>> countryDisplayData = manager.getCountryDisplayData();
+                vector<pair<string, string>> countryDisplayData = manager.getCountryCodeData();
                 cout << "Please enter your country's code. The available countries are listed below:" << endl;
                 for (auto it = countryDisplayData.begin(); it != countryDisplayData.end(); it++)
                     cout << (it->second) << ": " << (it->first) << endl;
@@ -128,11 +138,9 @@ int main(int argc, char *argv[])
             {
                 error(exception.what());
                 cout << "Error: " << exception.what() << endl;
-                cout << "Please try again." << endl;
             }
             continue;
         }
-
         if (!input.compare(login))
         {
             try
@@ -141,7 +149,7 @@ int main(int argc, char *argv[])
                 cout << "Please enter your email: ";
                 getline(cin, email);
 
-                User user = manager.findUserByEmail(email);
+                User user = manager.getUserByEmail(email);
 
                 cout << "Please enter your password: ";
                 getline(cin, password);
@@ -158,7 +166,6 @@ int main(int argc, char *argv[])
             {
                 error(exception.what());
                 cout << "Error: " << exception.what() << endl;
-                cout << "Please try again." << endl;
             }
             continue;
         }
@@ -182,16 +189,80 @@ int main(int argc, char *argv[])
             {
                 error(exception.what());
                 cout << "Error: " << exception.what() << endl;
-                cout << "Please try again." << endl;
             }
             continue;
         }
         if (!input.compare(infoUser) && isUserLoggedIn)
         {
+            cout << "Current user data:" << endl;
             cout << authenticatedUser;
             continue;
         }
-   
+
+        if (!input.compare(addAccount) && isUserLoggedIn)
+        {
+            try
+            {
+                string firstName, lastName, currencyCode;
+                cout << "Please enter account owner first name: ";
+                getline(cin, firstName);
+                cout << "Please enter account owner last name: ";
+                getline(cin, lastName);
+
+                vector<pair<string,string>> avilableCurrencies = manager.getCurrencyData();
+                cout << "Please enter the account currency. The available currencies are:" << endl;
+                for (auto it = avilableCurrencies.begin(); it != avilableCurrencies.end(); it++)
+                    cout << (it->first) << ": " << (it->second) << endl;
+                cout << endl;
+
+                getline(cin, currencyCode);
+
+                Account account = manager.createAccount(currencyCode, authenticatedUser, firstName, lastName);
+                cout << "You have successfully created a bank account!" << endl;
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
+        if (!input.compare(deleteAccount) && isUserLoggedIn)
+        {
+            try
+            {
+                string IBAN;
+                cout << "Please provide the IBAN of the account you want to delete: ";
+                getline(cin, IBAN);
+                manager.deleteAccount(IBAN, authenticatedUser);
+                cout << "You have successfully deleted your bank account" << endl;
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
+        if (!input.compare(viewAccounts) && isUserLoggedIn)
+        {
+            try
+            {
+                vector<Account> accounts = manager.getUserAccounts(authenticatedUser);
+                for (int index = 0; index < accounts.size(); index++)
+                {
+                    cout << "Account #" << index + 1 << endl;
+                    cout << accounts[index] << endl;
+                }
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
+        
         cout << "Unknown command or you do not have access to this command. To view all available commands, type 'help'." << endl;
     }
     return 0;

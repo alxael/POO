@@ -1,4 +1,11 @@
 INSERT INTO
+        currencies (id, name, code)
+VALUES
+        (1, 'Euro', 'EUR'),
+        (2, 'Romanian new leu', 'RON'),
+        (3, 'British pound sterling', 'GBP');
+
+INSERT INTO
         countries (id, name, code, ibanpattern)
 VALUES
         (
