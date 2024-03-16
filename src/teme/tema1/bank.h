@@ -36,6 +36,27 @@ namespace bank
         void setCode(string code) { code = code; }
     };
 
+    class Exchange
+    {
+    private:
+        Currency source, destination;
+        double rate;
+
+    public:
+        Exchange(Currency source, Currency destination, double rate) : source(source), destination(destination), rate(rate) {}
+        Exchange() {}
+        ~Exchange() {}
+
+        Currency getSource() const { return source; }
+        void setSource(Currency source) { source = source; }
+
+        Currency getDestination() const { return destination; }
+        void setDestination(Currency destination) { destination = destination; }
+
+        double getRate() const { return rate; }
+        void setRate(double rate) { rate = rate; }
+    };
+
     class Country
     {
     private:
@@ -333,6 +354,7 @@ namespace bank
             IBAN = user.getCountry().generateIBAN();
             amount = 0;
         }
+        Account() { amount = 0; }
         ~Account() {}
 
         double getAmount() const { return amount; }
@@ -367,15 +389,27 @@ namespace bank
             info(nameOutput);
             return out;
         }
+        bool operator==(const Account &other) { return (IBAN == other.IBAN); }
     };
 
     class Transaction
     {
     private:
-        Account inboundAccount;
-        Account outboundAccount;
+        Account inbound;
+        Account outbound;
         double amount;
 
     public:
+        Transaction(Account inbound, Account outbound, double amount) : inbound(inbound), outbound(outbound), amount(amount) {}
+        ~Transaction() {}
+
+        double getAmount() { return amount; }
+        void setAmount(double amount) { amount = amount; }
+
+        Account getInbound() { return inbound; }
+        void setInbound(Account inbound) { inbound = inbound; }
+
+        Account getOutbound() { return outbound; }
+        void setOutbound(Account outbound) { outbound = outbound; }
     };
 };

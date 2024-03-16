@@ -40,9 +40,11 @@ int main(int argc, char *argv[])
 
     // load data
     manager.loadCurrencies();
+    manager.loadExchanges();
     manager.loadCountries();
     manager.loadUsers();
     manager.loadAccounts();
+    manager.loadTransactions();
 
     // available commands
     string generalHeader = "General commands:";
@@ -76,7 +78,14 @@ int main(int argc, char *argv[])
     string viewAccountsMessage = "*[" + viewAccounts + "] - view all bank accounts associated with your account";
     vector<string> accountCommands{accountsHeader, addAccountMessage, deleteAccountMessage, viewAccountsMessage};
 
-    vector<vector<string>> commandSections{generalCommands, authenticationCommands, accountCommands};
+    string transactionsHeader = "Transaction-related commands:";
+    string newTransaction = "new-transaction";
+    string newTransactionMessage = "*[" + newTransaction + "] - create a new transaction";
+    string viewTransactions = "view-transactions";
+    string viewTransactionsMessage = "*[" + viewTransactions + "] - view all transactions from an account";
+    vector<string> transactionCommands{transactionsHeader, newTransactionMessage, viewTransactionsMessage};
+
+    vector<vector<string>> commandSections{generalCommands, authenticationCommands, accountCommands, transactionCommands};
 
     // prompt user with welcome message
     cout << "Welcome to Useless Bank! You can view the available commands by typing 'help' below." << endl;
@@ -209,7 +218,7 @@ int main(int argc, char *argv[])
                 cout << "Please enter account owner last name: ";
                 getline(cin, lastName);
 
-                vector<pair<string,string>> avilableCurrencies = manager.getCurrencyData();
+                vector<pair<string, string>> avilableCurrencies = manager.getCurrencyData();
                 cout << "Please enter the account currency. The available currencies are:" << endl;
                 for (auto it = avilableCurrencies.begin(); it != avilableCurrencies.end(); it++)
                     cout << (it->first) << ": " << (it->second) << endl;
@@ -262,7 +271,100 @@ int main(int argc, char *argv[])
             }
             continue;
         }
-        
+
+        if (!input.compare(newTransaction) && isUserLoggedIn)
+        {
+            try
+            {
+                vector<Account> accounts = manager.getUserAccounts(authenticatedUser);
+                cout << "Please select the account from which you want to make the transaction:" << endl;
+                for (int index = 0; index < accounts.size(); index++)
+                    cout << accounts[index] << endl;
+
+                string outboundIBAN, inboundIBAN, amountString;
+
+                cout << "Your IBAN: ";
+                getline(cin, outboundIBAN);
+                cout << "Destination IBAN: ";
+                getline(cin, inboundIBAN);
+                cout << "Transaction amount: ";
+                getline(cin, amountString);
+
+                if (!outboundIBAN.compare(inboundIBAN))
+                    throw(runtime_error("You can not make a transfer from an account to the same account."));
+
+                double amount = stod(amountString);
+                manager.createTransaction(authenticatedUser, inboundIBAN, outboundIBAN, amount);
+                cout << "Transaction successfully registered!" << endl;
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
+        if (!input.compare(viewTransactions) && isUserLoggedIn)
+        {
+            try
+            {
+                vector<Account> accounts = manager.getUserAccounts(authenticatedUser);
+                cout << "Please select the account from which you want to make the transaction:" << endl;
+                for (int index = 0; index < accounts.size(); index++)
+                    cout << accounts[index] << endl;
+
+                string IBAN;
+                cout << "IBAN: ";
+                getline(cin, IBAN);
+
+                bool matches = false;
+                Account account;
+                for (auto it = accounts.begin(); it != accounts.end(); it++)
+                    if (!(*it).getIBAN().compare(IBAN))
+                    {
+                        matches = true;
+                        account = *it;
+                        break;
+                    }
+                if (!matches)
+                    throw(runtime_error("IBAN does not exist, or is not associated with one of your accounts."));
+
+                vector<Transaction> transactions = manager.getAccountTransactions(account);
+                vector<string> inboundTransactions, outboundTransactions;
+                for (auto it = transactions.begin(); it != transactions.end(); it++)
+                {
+                    if (it->getInbound() == account)
+                    {
+                        inboundTransactions.emplace_back(
+                            "From " + it->getOutbound().getIBAN() +
+                            " recieved " + to_string(it->getAmount()) +
+                            " " + it->getOutbound().getCurrency().getCode());
+                    }
+                    else
+                    {
+                        outboundTransactions.emplace_back(
+                            "To " + it->getInbound().getIBAN() +
+                            " sent " + to_string(it->getAmount()) +
+                            " " + it->getOutbound().getCurrency().getCode());
+                    }
+                }
+
+                cout << "Inbound transactions: " << endl;
+                for (auto it = inboundTransactions.begin(); it != inboundTransactions.end(); it++)
+                    cout << *it << endl;
+                cout << endl;
+                cout << "Outbound transactions: " << endl;
+                for (auto it = outboundTransactions.begin(); it != outboundTransactions.end(); it++)
+                    cout << *it << endl;
+                cout << endl;
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
         cout << "Unknown command or you do not have access to this command. To view all available commands, type 'help'." << endl;
     }
     return 0;

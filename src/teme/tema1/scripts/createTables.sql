@@ -4,6 +4,13 @@ CREATE TABLE IF NOT EXISTS Currencies (
     code varchar(255) NOT NULL UNIQUE
 );
 
+CREATE TABLE IF NOT EXISTS Exchanges (
+    id int NOT NULL PRIMARY KEY,
+    source int references Currencies(id),
+    destination int references Currencies(id),
+    rate double precision NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS Countries (
     id int NOT NULL PRIMARY KEY,
     name varchar(255) NOT NULL,
@@ -28,4 +35,11 @@ CREATE TABLE IF NOT EXISTS Accounts (
     amount double precision NOT NULL,
     firstname varchar(255) NOT NULL,
     lastname varchar(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Transactions (
+    id int NOT NULL PRIMARY KEY,
+    inbound int references Accounts(id),
+    outbound int references Accounts(id),
+    amount double precision NOT NULL
 );

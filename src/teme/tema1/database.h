@@ -1,6 +1,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 #include <pqxx/pqxx>
 
 using namespace std;
@@ -16,9 +17,11 @@ namespace database
         pqxx::nontransaction work;
 
         map<int, Currency> currencies;
+        map<int, Exchange> exchanges;
         map<int, Country> countries;
         map<int, User> users;
         map<int, Account> accounts;
+        map<int, Transaction> transactions;
 
         string queryString(string input) { return "'" + input + "'"; }
 
@@ -36,12 +39,26 @@ namespace database
                     return *it;
             throw(runtime_error("Country with code '" + code + "' was not found."));
         }
-        pair<int, Currency> getCurrencyFromCode(string code)
+        pair<int, Currency> getCurrencyEntryFromCode(string code)
         {
             for (auto it = currencies.begin(); it != currencies.end(); it++)
                 if (!(it->second).getCode().compare(code))
                     return *it;
             throw(runtime_error("Currency with code '" + code + "' was not found."));
+        }
+        pair<int, Exchange> getExchangeEntryFromCurrencyCodes(string sourceCode, string destinationCode)
+        {
+            for (auto it = exchanges.begin(); it != exchanges.end(); it++)
+                if (!(it->second).getSource().getCode().compare(sourceCode) && !(it->second).getDestination().getCode().compare(destinationCode))
+                    return *it;
+            throw(runtime_error("Exchange from " + sourceCode + " to " + destinationCode + " not found."));
+        }
+        pair<int, Account> getAccountEntryFromIBAN(string IBAN)
+        {
+            for (auto it = accounts.begin(); it != accounts.end(); it++)
+                if (!(it->second).getIBAN().compare(IBAN))
+                    return *it;
+            throw(runtime_error("Could not find account with provided IBAN."));
         }
 
     public:
@@ -102,13 +119,43 @@ namespace database
             currencies = queryResult;
         }
         map<int, Currency> getCurrencies() { return currencies; }
-        vector<pair<string,string>> getCurrencyData()
+        vector<pair<string, string>> getCurrencyData()
         {
-            vector<pair<string,string>> result;
+            vector<pair<string, string>> result;
             for (auto it = currencies.begin(); it != currencies.end(); it++)
-                result.emplace_back(pair<string,string>((it->second).getCode(), (it->second).getName()));
+                result.emplace_back(pair<string, string>((it->second).getCode(), (it->second).getName()));
             return result;
         }
+
+        void loadExchanges(string query = "SELECT * FROM Exchanges;")
+        {
+            pqxx::result result = work.exec(query);
+
+            map<int, Exchange> queryResult;
+            for (auto const &row : result)
+            {
+                int id = row[0].as<int>();
+                int sourceId = row[1].as<int>();
+                int destinationId = row[2].as<int>();
+                double rate = row[3].as<double>();
+
+                auto its = currencies.find(sourceId);
+                if (its == currencies.end())
+                    throw(runtime_error("Could not find currency with ID: " + to_string(sourceId)));
+                Currency source = its->second;
+
+                auto itd = currencies.find(destinationId);
+                if (itd == currencies.end())
+                    throw(runtime_error("Could not find currency with ID: " + to_string(destinationId)));
+                Currency destination = itd->second;
+
+                Exchange exchange(its->second, itd->second, rate);
+                queryResult.insert(pair<int, Exchange>(id, exchange));
+            }
+
+            exchanges = queryResult;
+        }
+        map<int, Exchange> getExchanges() { return exchanges; }
 
         void loadCountries(string query = "SELECT * FROM Countries;")
         {
@@ -153,9 +200,8 @@ namespace database
                 auto it = countries.find(countryId);
                 if (it == countries.end())
                     throw(runtime_error("Could not find country with ID: " + to_string(countryId)));
-                Country country = (it->second);
 
-                User user(country, email, firstName, lastName, password);
+                User user(it->second, email, firstName, lastName, password);
                 queryResult.insert(pair<int, User>(id, user));
             }
 
@@ -194,7 +240,7 @@ namespace database
             loadUsers();
         }
 
-        void loadAccounts(string query = "SELECT * from Accounts;")
+        void loadAccounts(string query = "SELECT * FROM Accounts;")
         {
             pqxx::result result = work.exec(query);
 
@@ -212,14 +258,12 @@ namespace database
                 auto itc = currencies.find(currencyId);
                 if (itc == currencies.end())
                     throw(runtime_error("Could not find currency with ID: " + to_string(currencyId)));
-                Currency currency = (itc->second);
 
                 auto itu = users.find(userId);
                 if (itu == users.end())
                     throw(runtime_error("Could not find user with ID: " + to_string(userId)));
-                User user = (itu->second);
 
-                Account account(currency, user, IBAN, amount, firstName, lastName);
+                Account account((itc->second), (itu->second), IBAN, amount, firstName, lastName);
                 queryResult.insert(pair<int, Account>(id, account));
             }
 
@@ -228,7 +272,7 @@ namespace database
         map<int, Account> getAccounts() { return accounts; }
         Account createAccount(string currencyCode, User user, string firstName, string lastName)
         {
-            pair<int, Currency> currencyEntry = getCurrencyFromCode(currencyCode);
+            pair<int, Currency> currencyEntry = getCurrencyEntryFromCode(currencyCode);
             Account account(currencyEntry.second, user, firstName, lastName);
             pair<int, User> userEntry = getUserEntryFromEmail(user.getEmail());
 
@@ -245,15 +289,26 @@ namespace database
             loadAccounts();
             return account;
         }
-        Account findAccountByIBAN(string IBAN)
+        Account getAccountByIBAN(string IBAN)
         {
             for (auto it = accounts.begin(); it != accounts.end(); it++)
                 if (!(it->second).getIBAN().compare(IBAN))
                     return (it->second);
             throw(runtime_error("Could not find account with provided IBAN."));
         }
+        void updateAccount(string IBAN, double newAmount)
+        {
+            pair<int, Account> accountEntry = getAccountEntryFromIBAN(IBAN);
+
+            string query = "UPDATE Accounts SET amount=" + to_string(newAmount) + " WHERE iban=" + queryString(IBAN) + ";";
+            work.exec(query);
+
+            accounts[accountEntry.first].setAmount(newAmount);
+        }
         vector<Account> getUserAccounts(User user)
         {
+            loadAccounts();
+
             vector<Account> result;
             for (auto it = accounts.begin(); it != accounts.end(); it++)
                 if ((it->second).getUser() == user)
@@ -263,12 +318,79 @@ namespace database
         }
         void deleteAccount(string IBAN, User user)
         {
-            Account account = findAccountByIBAN(IBAN);
+            Account account = getAccountByIBAN(IBAN);
             if (account.getUser() != user)
                 throw(runtime_error("You may only delete your own account."));
             string query = "DELETE FROM Accounts WHERE iban=" + queryString(IBAN) + ";";
             work.exec(query);
             loadAccounts();
+        }
+
+        void loadTransactions(string query = "SELECT * FROM Transactions;")
+        {
+            pqxx::result result = work.exec(query);
+
+            map<int, Transaction> queryResult;
+            for (auto const &row : result)
+            {
+                int id = row[0].as<int>();
+                int inboundId = row[1].as<int>();
+                int outboundId = row[2].as<int>();
+                double amount = row[3].as<double>();
+
+                auto iti = accounts.find(inboundId);
+                if (iti == accounts.end())
+                    throw(runtime_error("Could not find inbound account with ID: " + to_string(inboundId)));
+
+                auto ito = accounts.find(outboundId);
+                if (iti == accounts.end())
+                    throw(runtime_error("Could not find outbound account with ID: " + to_string(outboundId)));
+
+                Transaction transaction(iti->second, ito->second, amount);
+                queryResult.insert(pair<int, Transaction>(id, transaction));
+            }
+
+            transactions = queryResult;
+        }
+        map<int, Transaction> getTransactions() { return transactions; }
+        void createTransaction(User user, string inboundIBAN, string outboundIBAN, double amount)
+        {
+            pair<int, Account> inboundEntry = getAccountEntryFromIBAN(inboundIBAN);
+            pair<int, Account> outboundEntry = getAccountEntryFromIBAN(outboundIBAN);
+
+            vector<Account> userAccounts = getUserAccounts(user);
+            if (find(userAccounts.begin(), userAccounts.end(), outboundEntry.second) == userAccounts.end())
+                throw(runtime_error("You may only transfer money from your own account."));
+
+            // outbound = source, inbound = destination
+            pair<int, Exchange> exchangeEntry = getExchangeEntryFromCurrencyCodes(outboundEntry.second.getCurrency().getCode(), inboundEntry.second.getCurrency().getCode());
+
+            double rate = exchangeEntry.second.getRate();
+
+            double newOutboundAmount = outboundEntry.second.getAmount() - amount;
+            if (newOutboundAmount < 0)
+                throw(runtime_error("Insufficient funds for transaction."));
+            double newInboundAmount = inboundEntry.second.getAmount() + amount * rate;
+
+            updateAccount(inboundIBAN, newInboundAmount);
+            updateAccount(outboundIBAN, newOutboundAmount);
+
+            string query = "INSERT INTO Transactions VALUES (" +
+                           to_string(transactions.size()) + "," +
+                           to_string(inboundEntry.first) + "," +
+                           to_string(outboundEntry.first) + "," +
+                           to_string(amount) + ");";
+
+            work.exec(query);
+            loadTransactions();
+        }
+        vector<Transaction> getAccountTransactions(Account account)
+        {
+            vector<Transaction> result;
+            for (auto it = transactions.begin(); it != transactions.end(); it++)
+                if ((it->second).getInbound() == account || (it->second).getOutbound() == account)
+                    result.emplace_back((it->second));
+            return result;
         }
     };
 };

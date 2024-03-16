@@ -1,41 +1,54 @@
 INSERT INTO
         currencies (id, name, code)
 VALUES
-        (1, 'Euro', 'EUR'),
-        (2, 'Romanian new leu', 'RON'),
-        (3, 'British pound sterling', 'GBP');
+        (0, 'Euro', 'EUR'),
+        (1, 'Romanian new leu', 'RON'),
+        (2, 'British pound sterling', 'GBP');
+
+INSERT INTO
+        exchanges (id, source, destination, rate)
+VALUES
+        (0, 0, 0, 1),
+        (1, 0, 1, 4.9750),
+        (2, 0, 2, 0.8558),
+        (3, 1, 0, 0.2010),
+        (4, 1, 1, 1),
+        (5, 1, 2, 0.1720),
+        (6, 2, 0, 1.1683),
+        (7, 2, 1, 5.8126),
+        (8, 2, 2, 1);
 
 INSERT INTO
         countries (id, name, code, ibanpattern)
 VALUES
         (
-                1,
+                0,
                 'Romania',
                 'RO',
                 'aaaacccccccccccccccc'
         ),
         (
-                2,
+                1,
                 'France',
                 'FR',
                 'nnnnnnnnnncccccccccccnn'
         ),
-        (3, 'Germany', 'GR', 'nnnnnnnnnnnnnnnnnn'),
+        (2, 'Germany', 'GR', 'nnnnnnnnnnnnnnnnnn'),
         (
-                4,
+                3,
                 'Italy',
                 'IT',
                 'annnnnnnnnncccccccccccc'
         ),
         (
-                5,
+                4,
                 'United Kingdom',
                 'GB',
                 'aaaannnnnnnnnnnnnn'
         );
 
 INSERT INTO
-        users(
+        users (
                 id,
                 country,
                 email,
@@ -46,9 +59,38 @@ INSERT INTO
 VALUES
         (
                 0,
-                1,
-                'alex.aelenei04@gmail.com',
-                'Alex',
-                'Aelenei',
+                0,
+                'admin@admin.com',
+                'admin',
+                'admin',
                 'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8='
+        ),
+        (
+                1,
+                1,
+                'test@test.com',
+                'test',
+                'test',
+                'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8='
+        );
+
+INSERT INTO
+        accounts (
+                id,
+                currency,
+                "user",
+                iban,
+                amount,
+                firstname,
+                lastname
+        )
+VALUES
+        (
+                0,
+                0,
+                0,
+                'RO83OPPCo1JNAQ8eEheih5zI',
+                1000000,
+                'admin',
+                'admin'
         );
