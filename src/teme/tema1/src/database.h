@@ -156,6 +156,14 @@ namespace database
             exchanges = queryResult;
         }
         map<int, Exchange> getExchanges() { return exchanges; }
+        vector<tuple<string, string, string>> getExchangeData()
+        {
+            vector<tuple<string, string, string>> result;
+            for (auto it = exchanges.begin(); it != exchanges.end(); it++)
+                if ((it->second).getSource() != (it->second).getDestination())
+                    result.emplace_back(tuple<string, string, string>((it->second).getSource().getCode(), (it->second).getDestination().getCode(), to_string((it->second).getRate())));
+            return result;
+        }
 
         void loadCountries(string query = "SELECT * FROM Countries;")
         {
@@ -321,6 +329,13 @@ namespace database
             Account account = getAccountByIBAN(IBAN);
             if (account.getUser() != user)
                 throw(runtime_error("You may only delete your own account."));
+
+            string accountQuery = "SELECT * FROM Accounts WHERE iban=" + queryString(IBAN) + ";";
+            pqxx::row result = work.exec1(accountQuery);
+            int accountId = result[0].as<int>();
+            string transactionsQuery = "DELETE FROM Transactions WHERE inbound=" + to_string(accountId) + " OR " + "outbound=" + to_string(accountId) + ";";
+            work.exec(transactionsQuery);
+
             string query = "DELETE FROM Accounts WHERE iban=" + queryString(IBAN) + ";";
             work.exec(query);
             loadAccounts();

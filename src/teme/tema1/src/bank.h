@@ -34,6 +34,8 @@ namespace bank
 
         string getCode() const { return code; }
         void setCode(string code) { code = code; }
+
+        bool operator!=(const Currency &other) { return (other.code != code && other.name != name); }
     };
 
     class Exchange
@@ -64,7 +66,7 @@ namespace bank
         string code;
         string IBANPattern;
 
-        bool IBANMatchesPattern(string IBAN)
+        bool IBANMatchesPattern(string IBAN) const
         {
             // check country code
             string countryCode(IBAN.substr(0, 2));
@@ -90,7 +92,7 @@ namespace bank
 
             return true;
         }
-        long long getChecksum(string truncatedIBAN)
+        long long getChecksum(string truncatedIBAN) const
         {
             string numberString;
             for (int index = 0; index < truncatedIBAN.length(); index++)

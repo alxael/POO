@@ -83,7 +83,9 @@ int main(int argc, char *argv[])
     string newTransactionMessage = "*[" + newTransaction + "] - create a new transaction";
     string viewTransactions = "view-transactions";
     string viewTransactionsMessage = "*[" + viewTransactions + "] - view all transactions from an account";
-    vector<string> transactionCommands{transactionsHeader, newTransactionMessage, viewTransactionsMessage};
+    string viewExchangeRates = "view-exchange";
+    string viewExchangeRatesMessage = " [" + viewExchangeRates + "] - view current exchange rates";
+    vector<string> transactionCommands{transactionsHeader, newTransactionMessage, viewTransactionsMessage, viewExchangeRatesMessage};
 
     vector<vector<string>> commandSections{generalCommands, authenticationCommands, accountCommands, transactionCommands};
 
@@ -189,10 +191,18 @@ int main(int argc, char *argv[])
         {
             try
             {
-                manager.deleteUser(authenticatedUser);
-                User emptyUser;
-                authenticatedUser = emptyUser;
-                cout << "Account deleted successfully!" << endl;
+                string confirmation;
+                cout << "Are you sure you want to delete your account? [yes/no]" << endl;
+                getline(cin, confirmation);
+
+                if (!confirmation.compare("yes") || !confirmation.compare("y"))
+                {
+                    manager.deleteUser(authenticatedUser);
+                    User emptyUser;
+                    authenticatedUser = emptyUser;
+                    cout << "Account deleted successfully!" << endl;
+                }
+                continue;
             }
             catch (exception const &exception)
             {
@@ -356,6 +366,22 @@ int main(int argc, char *argv[])
                 cout << "Outbound transactions: " << endl;
                 for (auto it = outboundTransactions.begin(); it != outboundTransactions.end(); it++)
                     cout << *it << endl;
+                cout << endl;
+            }
+            catch (exception const &exception)
+            {
+                error(exception.what());
+                cout << "Error: " << exception.what() << endl;
+            }
+            continue;
+        }
+        if (!input.compare(viewExchangeRates))
+        {
+            try
+            {
+                vector<tuple<string, string, string>> exchanges = manager.getExchangeData();
+                for (auto it = exchanges.begin(); it != exchanges.end(); it++)
+                    cout << get<0>(*it) << " -> " << get<1>(*it) << " at " << get<2>(*it) << endl;
                 cout << endl;
             }
             catch (exception const &exception)
