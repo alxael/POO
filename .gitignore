@@ -35,5 +35,5 @@
 *.log
 
 # CMake build directory
-CMakeFiles
-src/teme/tema1/build/tema1
+build
+vcpkg_installed
