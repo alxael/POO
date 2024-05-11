@@ -5,9 +5,6 @@
 #include <algorithm>
 #include <functional>
 
-#include "bank.h"
-#include "database.h"
-
 using namespace std;
 using namespace spdlog;
 using namespace bank;
@@ -60,12 +57,12 @@ namespace interface
     {
     private:
         DatabaseManager manager;
-        pair<int, User> authenticatedUser;
+        pair<long long, User> authenticatedUser;
         map<Command, function<void()>> commandMapping;
         bool isRunning;
 
-        void clearUtility() { system(CLEAR_COMMAND); }
-        void setInputEcho(bool enable)
+        inline static void clearUtility() { system(CLEAR_COMMAND); }
+        inline static void setInputEcho(bool enable)
         {
 #ifdef WIN32
             HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
@@ -93,32 +90,7 @@ namespace interface
             cin >> input;
             if (input == "exit")
                 this->exit();
-            // if(input == "quit" || input == "q")
-            //     continue commands
             return input;
-        }
-
-        bool strongPasswordValidator(string password)
-        {
-            bool hasLower = false, hasUpper = false, hasNumber = false, hasSpecial = false;
-            string special = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-            for (auto it = password.begin(); it != password.end(); it++)
-            {
-                if (islower(*it))
-                    hasLower = true;
-                if (isupper(*it))
-                    hasUpper = true;
-                if (isnumber(*it))
-                    hasNumber = true;
-                if (special.find(*it) != string::npos)
-                    hasSpecial = true;
-            }
-            return (hasLower || hasUpper || hasNumber || hasSpecial);
-        }
-        bool emailValidator(string email)
-        {
-            regex emailRegex("^[a-zA-Z0-9][a-zA-Z0-9_.]+@[a-zA-Z0-9_]+.[a-zA-Z0-9_.]+$");
-            return regex_search(email, emailRegex);
         }
 
         string emailUtility()
@@ -127,7 +99,7 @@ namespace interface
             while (true)
             {
                 email = getInput("Email: ");
-                if (!this->emailValidator(email))
+                if (!Validator::isPasswordStrong(email))
                     cout << "The provided email is not valid." << endl;
                 else
                     break;
@@ -146,7 +118,7 @@ namespace interface
                 cout << endl;
                 if (validate)
                 {
-                    if (!this->strongPasswordValidator(password))
+                    if (Validator::isPasswordStrong(password))
                         cout << "The provided password does not match the strength criteria. "
                              << "Please make sure your password contains at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character." << endl;
                     else
@@ -160,7 +132,7 @@ namespace interface
         string countryCodeUtility()
         {
             cout << "Please enter your country code. The available countries are:" << endl;
-            auto countryDisplayData = manager.getCountryDisplayData();
+            auto countryDisplayData = manager.getCountryEntity().getCountryDisplayData();
             for (const auto &displayData : countryDisplayData)
                 cout << displayData.first << ": " << displayData.second << endl;
             cout << endl;
@@ -183,7 +155,7 @@ namespace interface
         string currencyCodeUtility()
         {
             cout << "Please enter the currency. The available currencies are:" << endl;
-            auto currencyDisplayData = manager.getCurrencyDisplayData();
+            auto currencyDisplayData = manager.getCurrencyEntity().getCurrencyDisplayData();
             for (const auto &displayData : currencyDisplayData)
                 cout << displayData.first << ": " << displayData.second << endl;
             cout << endl;
@@ -218,13 +190,12 @@ namespace interface
         {
             vector<Command> noAuthenticationRequiredCommands;
             vector<Command> authenticationRequiredCommands;
-            for (auto it = commandMapping.begin(); it != commandMapping.end(); it++)
+            for (const auto &command : commandMapping)
             {
-                Command command = it->first;
-                if (command.getAuthenticationRequired())
-                    authenticationRequiredCommands.emplace_back(command);
+                if (command.first.getAuthenticationRequired())
+                    authenticationRequiredCommands.emplace_back(command.first);
                 else
-                    noAuthenticationRequiredCommands.emplace_back(command);
+                    noAuthenticationRequiredCommands.emplace_back(command.first);
             }
             this->clear();
             cout << endl;
@@ -246,7 +217,7 @@ namespace interface
             email = emailUtility();
             password = passwordUtility();
             countryCode = countryCodeUtility();
-            auto user = manager.createUser(countryCode, email, firstName, lastName, password);
+            auto user = manager.getUserEntity().createUser(countryCode, email, firstName, lastName, password);
             authenticatedUser = user;
             cout << "You have successfully created an account!" << endl;
         }
@@ -257,7 +228,7 @@ namespace interface
             string email, password;
             email = emailUtility();
             password = passwordUtility(false);
-            auto user = manager.getUserFromEmail(email);
+            auto user = manager.getUserEntity().getUserFromEmail(email);
             if (user.second.authenticate(password))
             {
                 authenticatedUser = user;
@@ -281,7 +252,9 @@ namespace interface
             string confirmation = getInput("Confirm: ");
             if (confirmation == "yes" || confirmation == "y")
             {
-                manager.deleteUser(authenticatedUser);
+                auto accounts = manager.getAccountEntity().getUserAccounts(authenticatedUser.first);
+                for (auto const &account : accounts)
+                    manager.getAccountTransactionEntity().deleteRecordById(account.first);
                 authenticatedUser = make_pair(-1, User());
                 cout << "Account deleted successfully!" << endl;
             }
@@ -293,7 +266,7 @@ namespace interface
             lastName = getInput("Account holder's last name: ");
             currencyCode = currencyCodeUtility();
 
-            pair<int, Account> account = manager.createAccount(currencyCode, authenticatedUser, firstName, lastName);
+            pair<int, Account> account = manager.getAccountEntity().createAccount(currencyCode, authenticatedUser.first, firstName, lastName);
             cout << "You have successfully created a bank account!" << endl;
         }
         void deleteAccount()
@@ -301,12 +274,17 @@ namespace interface
             this->viewAccounts();
             cout << endl;
             string IBAN = getInput("IBAN: ");
-            manager.deleteAccount(IBAN, authenticatedUser);
+
+            auto account = manager.getAccountEntity().getAccountFromIBAN(IBAN);
+            auto accounts = manager.getAccountEntity().getUserAccounts(authenticatedUser.first);
+            if (accounts.find(account.first) == accounts.end())
+                throw(InvalidBusinessLogicException("You may only delete your own account!"));
+            manager.getAccountTransactionEntity().deleteRecordById(account.first);
             cout << "You have successfully deleted your bank account" << endl;
         }
         void viewAccounts()
         {
-            auto accounts = manager.getUserAccounts(authenticatedUser);
+            auto accounts = manager.getAccountEntity().getUserAccounts(authenticatedUser.first);
             for (const auto &account : accounts)
             {
                 cout << "Account " << account.second.getIBAN() << endl;
@@ -328,7 +306,7 @@ namespace interface
                 throw(runtime_error("You can not make a transfer from an account to the same account."));
 
             double amount = stod(amountString);
-            manager.createTransaction(authenticatedUser, inboundIBAN, outboundIBAN, amount);
+            manager.getTransactionEntity().createTransaction(authenticatedUser.first, inboundIBAN, outboundIBAN, amount);
             cout << "Transaction successfully registered!" << endl;
         }
         void viewTransactions()
@@ -340,7 +318,7 @@ namespace interface
             string IBAN = getInput("IBAN: ");
 
             bool matches = false;
-            auto accounts = manager.getUserAccounts(authenticatedUser);
+            auto accounts = manager.getAccountEntity().getUserAccounts(authenticatedUser.first);
             pair<int, Account> userAccount;
             for (const auto &account : accounts)
                 if (account.second.getIBAN() == IBAN)
@@ -350,23 +328,20 @@ namespace interface
                     break;
                 }
             if (!matches)
-                throw(runtime_error("IBAN does not exist, or it is not associated with one of your accounts."));
+                throw(InvalidBusinessLogicException("IBAN does not exist, or it is not associated with one of your accounts."));
 
-            auto transactions = manager.getAccountTransactions(userAccount);
+            auto transactions = manager.getTransactionEntity().getAccountTransactions(userAccount.first);
             vector<string> inboundTransactions, outboundTransactions;
-            for (const auto &transaction : transactions)
-                if (transaction.second.getInbound() == userAccount.second)
-                {
-                    inboundTransactions.emplace_back("From " + transaction.second.getOutbound().getIBAN() +
-                                                     " recieved " + to_string(transaction.second.getAmount()) +
-                                                     " " + transaction.second.getOutbound().getCurrency().getCode());
-                }
-                else
-                {
-                    outboundTransactions.emplace_back("To " + transaction.second.getInbound().getIBAN() +
-                                                      " sent " + to_string(transaction.second.getAmount()) +
-                                                      " " + transaction.second.getOutbound().getCurrency().getCode());
-                }
+            for (const auto &transaction : transactions.first)
+                inboundTransactions.emplace_back("From " + transaction.second.getOutbound().getIBAN() +
+                                                 " recieved " + to_string(transaction.second.getAmount()) +
+                                                 " " + transaction.second.getOutbound().getCurrency().getCode() +
+                                                 "on " + transaction.second.getDate());
+            for (const auto &transaction : transactions.second)
+                outboundTransactions.emplace_back("To " + transaction.second.getInbound().getIBAN() +
+                                                  " sent " + to_string(transaction.second.getAmount()) +
+                                                  " " + transaction.second.getOutbound().getCurrency().getCode() +
+                                                  " on " + transaction.second.getDate());
 
             cout << endl;
             if (!inboundTransactions.empty())
@@ -380,14 +355,14 @@ namespace interface
                 cout << endl
                      << "Outbound transactions: " << endl;
                 for (const auto &outboundTransaction : outboundTransactions)
-                    cout << outboundTransaction;
+                    cout << outboundTransaction << endl;
             }
             if (inboundTransactions.empty() && outboundTransactions.empty())
                 cout << "There are no transactions associated with this account." << endl;
         }
         void viewExchange()
         {
-            auto exchanges = manager.getExchangeDisplayData();
+            auto exchanges = manager.getExchangeEntity().getExchangeDisplayData();
             for (const auto &exchange : exchanges)
                 cout << get<0>(exchange) << " -> " << get<1>(exchange) << " at " << get<2>(exchange) << endl;
         }
@@ -445,7 +420,6 @@ namespace interface
 
                 bool commandFound = false;
                 for (const auto &mapping : commandMapping)
-                {
                     if (input == mapping.first.getName())
                     {
                         if (authenticatedUser.first == -1 && mapping.first.getAuthenticationRequired())
@@ -459,7 +433,19 @@ namespace interface
                         {
                             mapping.second();
                         }
-                        catch (exception const &exception)
+                        catch (EntrySynchronizationException const &exception)
+                        {
+                            cout << exception.what() << endl;
+                        }
+                        catch (EntryNotFoundException const &exception)
+                        {
+                            cout << exception.what() << endl;
+                        }
+                        catch (InvalidBusinessLogicException const &exception)
+                        {
+                            cout << exception.what() << endl;
+                        }
+                        catch (std::exception const &exception)
                         {
                             cout << exception.what() << endl;
                         }
@@ -467,7 +453,6 @@ namespace interface
                         commandFound = true;
                         break;
                     }
-                }
                 if (!commandFound)
                     cout << "Command not found!" << endl;
             }

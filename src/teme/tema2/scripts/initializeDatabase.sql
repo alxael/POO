@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS Users (
         lastname varchar(255),
         password varchar(255) NOT NULL
 );
+CREATE SEQUENCE users_seq INCREMENT 1 START 2 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1;
+ALTER SEQUENCE public.users_seq OWNER TO postgres;
+ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_seq');
 
 CREATE TABLE IF NOT EXISTS Accounts (
         id int NOT NULL PRIMARY KEY,
@@ -36,107 +39,57 @@ CREATE TABLE IF NOT EXISTS Accounts (
         firstname varchar(255) NOT NULL,
         lastname varchar(255) NOT NULL
 );
+CREATE SEQUENCE accounts_seq INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1;
+ALTER SEQUENCE public.accounts_seq OWNER TO postgres;
+ALTER TABLE accounts ALTER COLUMN id SET DEFAULT nextval('accounts_seq');
 
 CREATE TABLE IF NOT EXISTS Transactions (
         id int NOT NULL PRIMARY KEY,
         inbound int references Accounts(id),
         outbound int references Accounts(id),
-        amount double precision NOT NULL
+        amount double precision NOT NULL,
+        date timestamp NOT NULL
 );
+CREATE SEQUENCE transactions_seq INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 9223372036854775807 CACHE 1;
+ALTER SEQUENCE public.transactions_seq OWNER TO postgres;
+ALTER TABLE transactions ALTER COLUMN id SET DEFAULT nextval('transactions_seq');
 
 INSERT INTO
         currencies (id, name, code)
 VALUES
-        (0, 'Euro', 'EUR'),
-        (1, 'Romanian new leu', 'RON'),
-        (2, 'British pound sterling', 'GBP');
+        (1, 'Euro', 'EUR'),
+        (2, 'Romanian new leu', 'RON'),
+        (3, 'British pound sterling', 'GBP');
 
 INSERT INTO
         exchanges (id, source, destination, rate)
 VALUES
-        (0, 0, 0, 1),
-        (1, 0, 1, 4.9750),
-        (2, 0, 2, 0.8558),
-        (3, 1, 0, 0.2010),
-        (4, 1, 1, 1),
-        (5, 1, 2, 0.1720),
-        (6, 2, 0, 1.1683),
-        (7, 2, 1, 5.8126),
-        (8, 2, 2, 1);
+        (1, 1, 1, 1),
+        (2, 1, 2, 4.9750),
+        (3, 1, 3, 0.8558),
+        (4, 2, 1, 0.2010),
+        (5, 2, 2, 1),
+        (6, 2, 3, 0.1720),
+        (7, 3, 1, 1.1683),
+        (8, 3, 2, 5.8126),
+        (9, 3, 3, 1);
 
 INSERT INTO
         countries (id, name, code, ibanpattern)
 VALUES
-        (
-                0,
-                'Romania',
-                'RO',
-                'aaaacccccccccccccccc'
-        ),
-        (
-                1,
-                'France',
-                'FR',
-                'nnnnnnnnnncccccccccccnn'
-        ),
-        (2, 'Germany', 'GR', 'nnnnnnnnnnnnnnnnnn'),
-        (
-                3,
-                'Italy',
-                'IT',
-                'annnnnnnnnncccccccccccc'
-        ),
-        (
-                4,
-                'United Kingdom',
-                'GB',
-                'aaaannnnnnnnnnnnnn'
-        );
+        (1, 'Romania', 'RO', 'aaaacccccccccccccccc'),
+        (2, 'France', 'FR', 'nnnnnnnnnncccccccccccnn'),
+        (3, 'Germany', 'GR', 'nnnnnnnnnnnnnnnnnn'),
+        (4, 'Italy', 'IT', 'annnnnnnnnncccccccccccc'),
+        (5, 'United Kingdom', 'GB', 'aaaannnnnnnnnnnnnn');
 
 INSERT INTO
-        users (
-                id,
-                country,
-                email,
-                firstname,
-                lastname,
-                password
-        )
+        users (country, email, firstname, lastname, password)
 VALUES
-        (
-                0,
-                0,
-                'admin@admin.com',
-                'admin',
-                'admin',
-                'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8='
-        ),
-        (
-                1,
-                1,
-                'test@test.com',
-                'test',
-                'test',
-                'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8='
-        );
+        (1, 'admin@admin.com', 'admin', 'admin', 'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8='),
+        (2, 'test@test.com', 'test', 'test', 'nPQYuMQ86pZZ7D7hQfgOWwcvpFehsPbM4BTzP2aMMf8=');
 
 INSERT INTO
-        accounts (
-                id,
-                currency,
-                associatedUser,
-                iban,
-                amount,
-                firstname,
-                lastname
-        )
+        accounts (currency, associatedUser, iban, amount, firstname, lastname)
 VALUES
-        (
-                0,
-                0,
-                0,
-                'RO83OPPCo1JNAQ8eEheih5zI',
-                1000000,
-                'admin',
-                'admin'
-        );
+        (1, 1, 'RO83OPPCo1JNAQ8eEheih5zI', 1000000, 'admin', 'admin');

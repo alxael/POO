@@ -1,6 +1,7 @@
-#include <ctime>
 #include <regex>
+#include <chrono>
 #include <random>
+#include <format>
 #include <cctype>
 #include <vector>
 #include <string>
@@ -13,8 +14,10 @@
 #include <cryptopp/base64.h>
 
 using namespace std;
-using namespace spdlog;
 using namespace CryptoPP;
+using namespace exception;
+using namespace validation;
+using namespace std::chrono;
 
 namespace bank
 {
@@ -43,8 +46,6 @@ namespace bank
             string codeOutput = "Currency code: " + currency.code;
             out << nameOutput << endl
                 << codeOutput << endl;
-            info(nameOutput);
-            info(codeOutput);
             return out;
         }
     };
@@ -52,31 +53,29 @@ namespace bank
     class Exchange
     {
     private:
-        Currency *source, *destination;
+        Currency source, destination;
         double rate;
 
     public:
-        Exchange(Currency *source, Currency *destination, double rate) : source(source), destination(destination), rate(rate) {}
+        Exchange(Currency &source, Currency &destination, double rate) : source(source), destination(destination), rate(rate) {}
         Exchange() {}
         ~Exchange() {}
 
-        Currency getSource() const { return *source; }
-        void setSource(Currency newSource) { source = &newSource; }
+        Currency getSource() const { return source; }
+        void setSource(Currency newSource) { source = newSource; }
 
-        Currency getDestination() const { return *destination; }
-        void setDestination(Currency newDestination) { destination = &newDestination; }
+        Currency getDestination() const { return destination; }
+        void setDestination(Currency newDestination) { destination = newDestination; }
 
         double getRate() const { return rate; }
         void setRate(double rate) { rate = rate; }
 
         friend ostream &operator<<(ostream &out, const Exchange &exchange)
         {
-            string exchangeOutput = "Exchange: " + exchange.source->getCode() + " -> " + exchange.destination->getCode();
+            string exchangeOutput = "Exchange: " + exchange.source.getCode() + " -> " + exchange.destination.getCode();
             string rateOutput = "Exchange rate: " + to_string(exchange.rate);
             out << exchangeOutput << endl
                 << rateOutput << endl;
-            info(exchangeOutput);
-            info(rateOutput);
             return out;
         }
     };
@@ -149,9 +148,9 @@ namespace bank
         Country(string name, string code, string pattern) : name(name), code(code), IBANPattern(pattern)
         {
             if (name.empty() || code.empty() || pattern.empty())
-                throw(runtime_error("All constructor parameters must be non-empty."));
+                throw(ValidationException("All constructor parameters must be non-empty."));
             if (pattern.length() < 15 || pattern.length() > 34)
-                throw(runtime_error("IBAN pattern must have a length between 15 and 34 characters."));
+                throw(ValidationException("IBAN pattern must have a length between 15 and 34 characters."));
         }
         Country(const Country &other)
         {
@@ -181,10 +180,6 @@ namespace bank
                 << nameOutput << endl
                 << codeOutput << endl
                 << IBANPatternOutput << endl;
-            info(header);
-            info(nameOutput);
-            info(codeOutput);
-            info(IBANPatternOutput);
             return out;
         }
         void operator=(const Country &other)
@@ -251,7 +246,7 @@ namespace bank
     class User
     {
     private:
-        Country *country;
+        Country country;
         string email;
         string firstName, lastName;
         string password;
@@ -265,41 +260,23 @@ namespace bank
             passwordHashed.pop_back(); // eliminate /n from the end
             return passwordHashed;
         }
-        bool isPasswordStrong(string password)
-        {
-            bool hasLower = false, hasUpper = false, hasNumber = false, hasSpecial = false;
-            string special = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
-            for (auto it = password.begin(); it != password.end(); it++)
-            {
-                if (islower(*it))
-                    hasLower = true;
-                if (isupper(*it))
-                    hasUpper = true;
-                if (isnumber(*it))
-                    hasNumber = true;
-                if (special.find(*it) != string::npos)
-                    hasSpecial = true;
-            }
-            return (hasLower || hasUpper || hasNumber || hasSpecial);
-        }
 
     public:
         // used for instantiating an existing account
-        User(Country *country, string email, string firstName, string lastName, string password) : country(country), email(email), firstName(firstName), lastName(lastName), password(password) {}
+        User(Country &country, string email, string firstName, string lastName, string password) : country(country), email(email), firstName(firstName), lastName(lastName), password(password) {}
         // used for registering new account
-        User(string emailProvided, string firstName, string lastName, string passwordNotHashed, Country *country) : country(country), email(emailProvided), firstName(firstName), lastName(lastName)
+        User(string emailProvided, string firstName, string lastName, string passwordNotHashed, Country &country) : country(country), email(emailProvided), firstName(firstName), lastName(lastName)
         {
-            regex emailRegex("^[a-zA-Z0-9][a-zA-Z0-9_.]+@[a-zA-Z0-9_]+.[a-zA-Z0-9_.]+$");
-            if (!regex_search(emailProvided, emailRegex))
-                throw(runtime_error("The provided email is not valid."));
+            if (!Validator::isEmail(emailProvided))
+                throw(ValidationException("The provided email is not valid."));
 
-            if (!isPasswordStrong(passwordNotHashed))
-                throw(runtime_error("The provided password does not match the strength criteria. Please make sure your password contains at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character."));
+            if (!Validator::isPasswordStrong(passwordNotHashed))
+                throw(ValidationException("The provided password does not match the strength criteria. Please make sure your password contains at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character."));
 
             password = hashPassword(passwordNotHashed);
 
             if (firstName.empty() || lastName.empty())
-                throw(runtime_error("First name and last name must be non-empty."));
+                throw(ValidationException("First name and last name must be non-empty."));
         }
         User(const User &other)
         {
@@ -322,21 +299,17 @@ namespace bank
         void setFirstName(string firstName) { firstName = firstName; }
         void setFullName(string lastName) { lastName = lastName; }
 
-        Country getCountry() const { return *country; }
+        Country getCountry() const { return country; }
         void setCountry(Country country) { country = country; }
 
         friend ostream &operator<<(ostream &out, const User &user)
         {
-            info(user.country->getCode());
             string emailOutput = "Email: " + user.email;
             string nameOutput = "Full name: " + user.getFullName();
-            string countryOutput = "Country: " + (user.country)->getName();
+            string countryOutput = "Country: " + user.country.getName();
             out << emailOutput << endl
                 << nameOutput << endl
                 << countryOutput << endl;
-            info(emailOutput);
-            info(nameOutput);
-            info(countryOutput);
             return out;
         }
         void operator=(const User &other)
@@ -360,8 +333,8 @@ namespace bank
     class Account
     {
     private:
-        Currency *currency;
-        User *user;
+        Currency currency;
+        User user;
         string IBAN;
         double amount;
         // holder firstName and lastName
@@ -369,11 +342,11 @@ namespace bank
 
     public:
         // used for instantiating an existing account
-        Account(Currency *currency, User *user, string IBAN, double amount, string firstName, string lastName) : currency(currency), user(user), IBAN(IBAN), amount(amount), firstName(firstName), lastName(lastName) {}
+        Account(Currency &currency, User &user, string IBAN, double amount, string firstName, string lastName) : currency(currency), user(user), IBAN(IBAN), amount(amount), firstName(firstName), lastName(lastName) {}
         // used for creating a new account
-        Account(Currency *currency, User *user, string firstName, string lastName) : currency(currency), user(user), firstName(firstName), lastName(lastName)
+        Account(Currency &currency, User &user, string firstName, string lastName) : currency(currency), user(user), firstName(firstName), lastName(lastName)
         {
-            IBAN = user->getCountry().generateIBAN();
+            IBAN = user.getCountry().generateIBAN();
             amount = 0;
         }
         Account() { amount = 0; }
@@ -385,10 +358,10 @@ namespace bank
         string getIBAN() const { return IBAN; }
         void setIBAN(string IBAN) { IBAN = IBAN; }
 
-        User getUser() const { return *user; }
+        User getUser() const { return user; }
         void setUser(User user) { user = user; }
 
-        Currency getCurrency() const { return *currency; }
+        Currency getCurrency() const { return currency; }
         void setCurrency(Currency currency) { currency = currency; }
 
         string getFullName() const { return firstName + " " + lastName; }
@@ -399,16 +372,12 @@ namespace bank
         {
             string IBANOutput = "IBAN: " + account.IBAN;
             string amountOutput = "Amount: " + to_string(account.amount);
-            string currencyOutput = "Currency: " + (account.currency)->getCode();
+            string currencyOutput = "Currency: " + account.currency.getCode();
             string nameOutput = "Holder full name: " + account.getFullName();
             cout << IBANOutput << endl
                  << amountOutput << endl
                  << currencyOutput << endl
                  << nameOutput << endl;
-            info(IBANOutput);
-            info(amountOutput);
-            info(currencyOutput);
-            info(nameOutput);
             return out;
         }
         bool operator==(const Account &other) const { return (IBAN == other.IBAN); }
@@ -417,31 +386,35 @@ namespace bank
     class Transaction
     {
     private:
-        Account *inbound;
-        Account *outbound;
+        Account inbound;
+        Account outbound;
         double amount;
+        time_point<system_clock> date;
 
     public:
-        Transaction(Account *inbound, Account *outbound, double amount) : inbound(inbound), outbound(outbound), amount(amount) {}
+        Transaction(Account &inbound, Account &outbound, double amount, time_point<system_clock> date) : inbound(inbound), outbound(outbound), amount(amount), date(date) {}
         ~Transaction() {}
 
         double getAmount() const { return amount; }
         void setAmount(double amount) { amount = amount; }
 
-        Account getInbound() const { return *inbound; }
-        void setInbound(Account newInbound) { inbound = &newInbound; }
+        Account getInbound() const { return inbound; }
+        void setInbound(Account newInbound) { inbound = newInbound; }
 
-        Account getOutbound() const { return *outbound; }
-        void setOutbound(Account newOutbound) { outbound = &newOutbound; }
+        Account getOutbound() const { return outbound; }
+        void setOutbound(Account newOutbound) { outbound = newOutbound; }
+
+        string getDate() const { return format("{:%F %T}", date); }
+        void setDate(time_point<system_clock> date) { date = date; }
 
         friend ostream &operator<<(ostream &out, const Transaction &transaction)
         {
-            string transactionOutput = "Transaction: " + transaction.outbound->getIBAN() + " -> " + transaction.inbound->getIBAN();
+            string transactionOutput = "Transaction: " + transaction.outbound.getIBAN() + " -> " + transaction.inbound.getIBAN();
             string amountOutput = "Transaction amount: " + to_string(transaction.amount);
+            string dateOutput = "Transaction date: " + transaction.getDate();
             out << transactionOutput << endl
-                << amountOutput << endl;
-            info(transactionOutput);
-            info(amountOutput);
+                << amountOutput << endl
+                << dateOutput << endl;
             return out;
         }
     };

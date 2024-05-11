@@ -3,6 +3,10 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <curses.h>
 
+#include "exception.h"
+#include "validation.h"
+#include "bank.h"
+#include "database.h"
 #include "interface.h"
 
 using namespace std;
@@ -23,5 +27,8 @@ int main(int argc, char *argv[])
 
     CLI cli("postgresql://postgres:postgres@localhost:5432/" + databaseName, "scripts/initializeDatabase.sql");
     cli.start();
+
+    // DatabaseManager databaseManager("postgresql://postgres:postgres@localhost:5432/" + databaseName, "scripts/initializeDatabase.sql");
+
     return 0;
 }
