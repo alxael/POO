@@ -121,8 +121,11 @@ namespace database
                     throw(EntrySynchronizationException("Entry with ID " + keyToString(id) + " in table " + table + " is not synchronized!"));
                 return *entry;
             }
-            else
-                return getRecordByProperty("id", keyToString(id));
+            else {
+                auto entry = getRecordByProperty("id", keyToString(id));
+                return entry;
+            }
+                
         }
         virtual void deleteRecordById(KeyType id) { deleteRecordsByProperty("id", keyToString(id)); }
     };
@@ -271,11 +274,7 @@ namespace database
             data.insert(entry);
             return entry;
         }
-        void deleteRecordById(long long userId) override
-        {
-            // create subquery to delete all accounts
-            Entity::deleteRecordById(userId);
-        }
+        void deleteRecordById(long long userId) override { Entity::deleteRecordById(userId); }
     };
 
     class TransactionEntity;
@@ -334,6 +333,9 @@ namespace database
         {
             string query = "UPDATE " + table + " SET amount=" + to_string(newAmount) + " WHERE id=" + Entity::keyToString(accountId) + ";";
             auto result = executeQuery(query);
+            auto newAccount = getRecordById(accountId);
+            data.erase(accountId);
+            data.insert(newAccount);
         }
     };
 
@@ -350,8 +352,6 @@ namespace database
             auto outboundId = row[2].as<long long>();
             auto amount = row[3].as<double>();
             auto dateString = row[4].as<string>();
-
-            cout << dateString << endl;
 
             auto date = stringToTimePoint(dateString);
             auto inbound = accountEntity.getRecordById(inboundId, true);

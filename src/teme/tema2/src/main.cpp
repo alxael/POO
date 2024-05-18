@@ -27,8 +27,5 @@ int main(int argc, char *argv[])
 
     CLI cli("postgresql://postgres:postgres@localhost:5432/" + databaseName, "scripts/initializeDatabase.sql");
     cli.start();
-
-    // DatabaseManager databaseManager("postgresql://postgres:postgres@localhost:5432/" + databaseName, "scripts/initializeDatabase.sql");
-
     return 0;
 }

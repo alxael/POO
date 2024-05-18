@@ -99,7 +99,7 @@ namespace interface
             while (true)
             {
                 email = getInput("Email: ");
-                if (!Validator::isPasswordStrong(email))
+                if (!Validator::isEmail(email))
                     cout << "The provided email is not valid." << endl;
                 else
                     break;
@@ -118,7 +118,7 @@ namespace interface
                 cout << endl;
                 if (validate)
                 {
-                    if (Validator::isPasswordStrong(password))
+                    if (!Validator::isPasswordStrong(password))
                         cout << "The provided password does not match the strength criteria. "
                              << "Please make sure your password contains at least 8 characters, one uppercase letter, one lowercase letter, one number and one special character." << endl;
                     else
@@ -255,6 +255,7 @@ namespace interface
                 auto accounts = manager.getAccountEntity().getUserAccounts(authenticatedUser.first);
                 for (auto const &account : accounts)
                     manager.getAccountTransactionEntity().deleteRecordById(account.first);
+                manager.getUserEntity().deleteRecordById(authenticatedUser.first);
                 authenticatedUser = make_pair(-1, User());
                 cout << "Account deleted successfully!" << endl;
             }
@@ -336,7 +337,7 @@ namespace interface
                 inboundTransactions.emplace_back("From " + transaction.second.getOutbound().getIBAN() +
                                                  " recieved " + to_string(transaction.second.getAmount()) +
                                                  " " + transaction.second.getOutbound().getCurrency().getCode() +
-                                                 "on " + transaction.second.getDate());
+                                                 " on " + transaction.second.getDate());
             for (const auto &transaction : transactions.second)
                 outboundTransactions.emplace_back("To " + transaction.second.getInbound().getIBAN() +
                                                   " sent " + to_string(transaction.second.getAmount()) +
@@ -435,7 +436,9 @@ namespace interface
                         }
                         catch (EntrySynchronizationException const &exception)
                         {
-                            cout << exception.what() << endl;
+                            // may lead to errors down the line
+                            // should be decided on how to handle such exceptions
+                            // cout << exception.what() << endl;
                         }
                         catch (EntryNotFoundException const &exception)
                         {
