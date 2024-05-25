@@ -27,6 +27,7 @@
         "iostream": "cpp",
         "__hash_table": "cpp",
         "__tree": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "iomanip": "cpp"
     }
 }
