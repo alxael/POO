@@ -1,4 +1,4 @@
-# Tema 2
+# Tema
 
 ## Set up
 Please ensure that [CMake](https://cmake.org) and [vcpkg](https://vcpkg.io/en/) are installed on your system. In addition, please ensure that all project dependencies are installed on your system. You can do this by going into the directory where the `vcpkg.json` file is found, and running the command `sudo vcpkg install`. This will install all necesary dependencies. To initialize the project, in the `tema2` directory run the `cmake --preset=default` command to generate the build folder.
