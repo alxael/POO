@@ -28,6 +28,11 @@
         "__hash_table": "cpp",
         "__tree": "cpp",
         "set": "cpp",
-        "iomanip": "cpp"
+        "iomanip": "cpp",
+        "pqxx": "cpp",
+        "any": "cpp",
+        "mutex": "cpp",
+        "istream": "cpp",
+        "fstream": "cpp"
     }
 }

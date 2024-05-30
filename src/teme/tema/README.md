@@ -14,9 +14,6 @@ All logging in the project is done using the `spdlog` library. The folder `logs`
 ## About the project
 This is a simple banking application, generically named "Useless bank". The project is currently a CLI tool that manages users, their accounts, and their transactions.
 
-## Changes from Tema 1
-
-
 ### General
 The user interacts with the application using the CLI. There is a series of available commands, which you may see by entering the `help` command. There is also an utility `clear` command that helps clear the terminal if it gets cluttered. The `exit` command shuts down the application.
 

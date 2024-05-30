@@ -3,11 +3,12 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <curses.h>
 
-#include "exception.h"
-#include "validation.h"
-#include "bank.h"
-#include "database.h"
-#include "interface.h"
+#include "exception.hpp"
+#include "validation.hpp"
+#include "bank.hpp"
+#include "query.hpp"
+#include "database.hpp"
+#include "interface.hpp"
 
 using namespace std;
 using namespace spdlog;

@@ -1,7 +1,9 @@
 #include <map>
+#include <any>
 #include <ctime>
 #include <chrono>
 #include <vector>
+#include <format>
 #include <iostream>
 #include <typeinfo>
 #include <algorithm>
@@ -18,20 +20,16 @@ namespace database
     class Entity
     {
     protected:
-        pqxx::connection &connection;
+        weak_ptr<pqxx::connection> connection;
         map<KeyType, Data> data;
         string table;
 
-        inline static const string queryString(string input) noexcept { return "'" + input + "'"; }
         inline static const string keyToString(KeyType key)
         {
-            // only integer id is supported at the moment
-            // implementation of uuid is in the backlog
             if (is_same<KeyType, long long>::value)
                 return to_string(key);
             throw(KeyTypeUnsupportedException(typeid(KeyType).name()));
         }
-        inline string getFindAllQuery() const noexcept { return "SELECT * FROM " + table + ";"; }
         inline static const time_point<system_clock> stringToTimePoint(const string date, const string format = "%F %H:%M:%S") noexcept
         {
             tm timeStruct = {};
@@ -41,44 +39,47 @@ namespace database
         }
 
         virtual pair<KeyType, Data> parseData(pqxx::row row) const = 0;
-        pqxx::result executeQuery(const string query) const
+        map<KeyType, Data> getRecords(Query &query) const
         {
-            pqxx::work work(connection);
-            pqxx::result result = work.exec(query);
-            info("Executing query: " + query);
-            work.commit();
-            return result;
-        }
-        map<KeyType, Data> getRecords(const string query) const
-        {
-            auto result = executeQuery(query);
+            auto result = query.execute();
             map<KeyType, Data> dataResult;
             for (auto const &row : result)
                 dataResult.insert(parseData(row));
             return dataResult;
         }
 
-        Entity(pqxx::connection &connection, const string table) : connection(connection), table(table) {}
+        Entity(weak_ptr<pqxx::connection> &connection, const string table) : connection(connection), table(table) {}
         ~Entity() = default;
 
-        map<KeyType, Data> getAllRecords() const { return getRecords(getFindAllQuery()); }
+        map<KeyType, Data> getAllRecords() const
+        {
+            Query query(connection, "SELECT * FROM :table;");
+            query.setParameter<string>("table", table, false);
+            return getRecords(query);
+        }
         map<KeyType, Data> getRecordsByProperty(string property, string value) const
         {
-            const string query = "SELECT * FROM " + table + " WHERE " + property + "=" + queryString(value) + ";";
+            Query query(connection, "SELECT * FROM :table WHERE :property=:value;");
+            query.setParameter<string>("table", table, false)
+                .template setParameter<string>("property", property, false)
+                .template setParameter<string>("value", value);
             return getRecords(query);
         }
         map<KeyType, Data> getRecordsByProperty(map<string, string> properties) const
         {
-            string query = "SELECT * FROM " + table + " WHERE ";
+            Query query(connection, "SELECT * FROM :table WHERE ");
+            query.setParameter<string>("table", table, false);
             long long index = 0;
             for (const auto &property : properties)
             {
-                query += property.first + "=" + queryString(property.second);
+                query.append(":property=:value ")
+                    .setParameter<string>("property", property.first, false)
+                    .setParameter<string>("value", property.second);
                 index++;
                 if (index < properties.size())
-                    query += " AND ";
+                    query.append(" AND ");
             }
-            query += ";";
+            query.append(";");
             return getRecords(query);
         }
         pair<KeyType, Data> getRecordByProperty(string property, string value) const
@@ -104,8 +105,11 @@ namespace database
         }
         void deleteRecordsByProperty(string property, string value)
         {
-            const string query = "DELETE FROM " + table + " WHERE " + property + "=" + value + ";";
-            auto result = executeQuery(query);
+            Query query(connection, "DELETE FROM :table WHERE :property=:value;");
+            query.setParameter<string>("table", table, false)
+                .template setParameter<string>("property", property, false)
+                .template setParameter<string>("value", value);
+            query.execute();
             loadData();
         }
 
@@ -121,11 +125,11 @@ namespace database
                     throw(EntrySynchronizationException("Entry with ID " + keyToString(id) + " in table " + table + " is not synchronized!"));
                 return *entry;
             }
-            else {
+            else
+            {
                 auto entry = getRecordByProperty("id", keyToString(id));
                 return entry;
             }
-                
         }
         virtual void deleteRecordById(KeyType id) { deleteRecordsByProperty("id", keyToString(id)); }
     };
@@ -143,7 +147,7 @@ namespace database
         }
 
     public:
-        CurrencyEntity(pqxx::connection &connection) : Entity::Entity(connection, "currencies") {}
+        CurrencyEntity(weak_ptr<pqxx::connection> connection) : Entity::Entity(connection, "currencies") {}
         ~CurrencyEntity() = default;
 
         pair<long long, Currency> getRecordById(long long id, bool cached = true) const override { return Entity::getRecordById(id, cached); }
@@ -181,7 +185,7 @@ namespace database
         }
 
     public:
-        ExchangeEntity(pqxx::connection &connection, CurrencyEntity &currencyEntity)
+        ExchangeEntity(weak_ptr<pqxx::connection> connection, CurrencyEntity &currencyEntity)
             : Entity::Entity(connection, "exchanges"),
               currencyEntity(currencyEntity) {}
         ~ExchangeEntity() = default;
@@ -218,7 +222,7 @@ namespace database
         }
 
     public:
-        CountryEntity(pqxx::connection &connection) : Entity::Entity(connection, "countries") {}
+        CountryEntity(weak_ptr<pqxx::connection> connection) : Entity::Entity(connection, "countries") {}
         ~CountryEntity() = default;
 
         vector<pair<string, string>> getCountryDisplayData() const
@@ -251,7 +255,7 @@ namespace database
         }
 
     public:
-        UserEntity(pqxx::connection &connection, CountryEntity &countryEntity)
+        UserEntity(weak_ptr<pqxx::connection> connection, CountryEntity &countryEntity)
             : Entity::Entity(connection, "users"),
               countryEntity(countryEntity) {}
         ~UserEntity() = default;
@@ -262,13 +266,14 @@ namespace database
             auto country = countryEntity.getCountryFromCode(countryCode);
             User user(email, firstName, lastName, password, country.second);
 
-            string query = "INSERT INTO " + table + " VALUES (DEFAULT ," +
-                           to_string(country.first) + "," +
-                           queryString(email) + "," +
-                           queryString(firstName) + "," +
-                           queryString(lastName) + "," +
-                           queryString(user.getPassword()) + ");";
-            auto result = executeQuery(query);
+            Query query(connection, "INSERT INTO :table VALUES (DEFAULT, :country, :email, :firstName, :lastName, :password);");
+            query.setParameter<string>("table", table, false)
+                .setParameter<long long>("country", country.first)
+                .setParameter<string>("email", email)
+                .setParameter<string>("firstName", firstName)
+                .setParameter<string>("lastName", lastName)
+                .setParameter<string>("password", user.getPassword());
+            query.execute();
 
             auto entry = getUserFromEmail(email);
             data.insert(entry);
@@ -303,7 +308,7 @@ namespace database
         }
 
     public:
-        AccountEntity(pqxx::connection &connection, CurrencyEntity &currencyEntity, UserEntity &userEntity, TransactionEntity &transactionEntity)
+        AccountEntity(weak_ptr<pqxx::connection> connection, CurrencyEntity &currencyEntity, UserEntity &userEntity, TransactionEntity &transactionEntity)
             : Entity::Entity(connection, "accounts"),
               currencyEntity(currencyEntity), userEntity(userEntity), transactionEntity(transactionEntity) {}
         ~AccountEntity() = default;
@@ -316,14 +321,15 @@ namespace database
             auto user = userEntity.getRecordById(userId);
             Account account(currency.second, user.second, firstName, lastName);
 
-            string query = "INSERT INTO Accounts VALUES (DEFAULT," +
-                           to_string(currency.first) + "," +
-                           to_string(user.first) + "," +
-                           queryString(account.getIBAN()) + "," +
-                           to_string(account.getAmount()) + "," +
-                           queryString(firstName) + "," +
-                           queryString(lastName) + ");";
-            auto result = executeQuery(query);
+            Query query(connection, "INSERT INTO :table VALUES (DEFAULT, :currency, :user, :iban, :amount, :firstName, :lastName);");
+            query.setParameter<string>("table", table, false)
+                .setParameter<long long>("currency", currency.first)
+                .setParameter<long long>("user", user.first)
+                .setParameter<string>("iban", account.getIBAN())
+                .setParameter<double>("amount", account.getAmount())
+                .setParameter<string>("firstName", firstName)
+                .setParameter<string>("lastName", lastName);
+            query.execute();
 
             auto entry = getAccountFromIBAN(account.getIBAN());
             data.insert(entry);
@@ -331,8 +337,11 @@ namespace database
         }
         void updateAccountAmount(long long accountId, double newAmount)
         {
-            string query = "UPDATE " + table + " SET amount=" + to_string(newAmount) + " WHERE id=" + Entity::keyToString(accountId) + ";";
-            auto result = executeQuery(query);
+            Query query(connection, "UPDATE :table SET amount=:amount WHERE id=:id;");
+            query.setParameter<string>("table", table, false)
+                .setParameter<double>("amount", newAmount)
+                .setParameter<long long>("id", accountId);
+            query.execute();
             auto newAccount = getRecordById(accountId);
             data.erase(accountId);
             data.insert(newAccount);
@@ -361,7 +370,7 @@ namespace database
         }
 
     public:
-        TransactionEntity(pqxx::connection &connection, AccountEntity &accountEntity, ExchangeEntity &exchangeEntity)
+        TransactionEntity(weak_ptr<pqxx::connection> connection, AccountEntity &accountEntity, ExchangeEntity &exchangeEntity)
             : Entity::Entity(connection, "transactions"),
               accountEntity(accountEntity), exchangeEntity(exchangeEntity) {}
         ~TransactionEntity() = default;
@@ -389,14 +398,15 @@ namespace database
             accountEntity.updateAccountAmount(outbound.first, newOutboundAmount);
 
             auto now = system_clock::now();
-            string nowString = format("{:%F %T}", now);
+            string nowString = std::format("{:%F %T}", now);
 
-            string query = "INSERT INTO Transactions VALUES (DEFAULT," +
-                           to_string(inbound.first) + "," +
-                           to_string(outbound.first) + "," +
-                           to_string(amount) + "," +
-                           queryString(nowString) + ");";
-            auto result = executeQuery(query);
+            Query query(connection, "INSERT INTO :table VALUES (DEFAULT, :inbound, :outbound, :amount, :date);");
+            query.setParameter<string>("table", table, false)
+                .setParameter<long long>("inbound", inbound.first)
+                .setParameter<long long>("outbound", outbound.first)
+                .setParameter<double>("amount", amount)
+                .setParameter<string>("date", nowString);
+            query.execute();
 
             auto entry = getRecordByProperty("date", nowString);
             data.insert(entry);
@@ -426,7 +436,10 @@ namespace database
     class DatabaseManager
     {
     private:
-        pqxx::connection connection;
+        static shared_ptr<DatabaseManager> instance;
+        static once_flag only_one;
+
+        shared_ptr<pqxx::connection> connection;
 
         CurrencyEntity currencyEntity;
         ExchangeEntity exchangeEntity;
@@ -437,7 +450,7 @@ namespace database
         AccountTransactionEntity accountTransactionEntity;
 
         // SQL utility functions
-        void executeQuery(ifstream &file, char fileSeparator = ';')
+        void initializeDatabase(ifstream &file, char fileSeparator = ';')
         {
             try
             {
@@ -448,10 +461,8 @@ namespace database
                         try
                         {
                             string finalQuery = query + fileSeparator;
-                            pqxx::work work(connection);
-                            work.exec(finalQuery);
-                            info("Executing query: \n" + finalQuery);
-                            work.commit();
+                            Query query(connection, finalQuery);
+                            query.execute();
                         }
                         catch (pqxx::sql_error const &sqlError)
                         {
@@ -466,18 +477,18 @@ namespace database
         }
 
     public:
-        DatabaseManager(string connectionString, string initializationFilePath) : connection(connectionString),
-                                                                                  currencyEntity(connection), countryEntity(connection),
-                                                                                  exchangeEntity(connection, currencyEntity), userEntity(connection, countryEntity),
-                                                                                  accountEntity(connection, currencyEntity, userEntity, transactionEntity), transactionEntity(connection, accountEntity, exchangeEntity),
-                                                                                  accountTransactionEntity(accountEntity, transactionEntity)
+        DatabaseManager(shared_ptr<pqxx::connection> connection, string initializationFilePath) : connection(connection),
+                                                                                                  currencyEntity(connection), countryEntity(connection),
+                                                                                                  exchangeEntity(connection, currencyEntity), userEntity(connection, countryEntity),
+                                                                                                  accountEntity(connection, currencyEntity, userEntity, transactionEntity), transactionEntity(connection, accountEntity, exchangeEntity),
+                                                                                                  accountTransactionEntity(accountEntity, transactionEntity)
         {
             info("Database connection opened.");
 
             // initialize database
             ifstream initializationFile;
             initializationFile.open(initializationFilePath, ios_base::in);
-            executeQuery(initializationFile);
+            initializeDatabase(initializationFile);
             initializationFile.close();
 
             currencyEntity.loadData();
@@ -489,8 +500,27 @@ namespace database
         }
         ~DatabaseManager()
         {
-            connection.close();
+            connection.get()->close();
             info("Database connection closed.");
+        }
+
+        DatabaseManager &operator=(const DatabaseManager &databaseManager)
+        {
+            if (this != &databaseManager)
+                instance = databaseManager.instance;
+            return *this;
+        }
+
+        static DatabaseManager &getInstance(shared_ptr<pqxx::connection> connection, string initializationFilePath)
+        {
+            call_once(
+                DatabaseManager::only_one,
+                [](shared_ptr<pqxx::connection> connection, string initializationFilePath)
+                {
+                    DatabaseManager::instance.reset(new DatabaseManager(connection, initializationFilePath));
+                },
+                connection, initializationFilePath);
+            return *DatabaseManager::instance;
         }
 
         CurrencyEntity getCurrencyEntity() { return currencyEntity; }

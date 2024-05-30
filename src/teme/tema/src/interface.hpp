@@ -145,7 +145,7 @@ namespace interface
             while (true)
             {
                 countryCode = getInput("Country code: ");
-                if (countryCodes.find(countryCode) == countryCodes.end())
+                if (find(countryCodes.begin(), countryCodes.end(), countryCode) == countryCodes.end())
                     cout << "Please enter a valid country code." << endl;
                 else
                     break;
@@ -332,31 +332,35 @@ namespace interface
                 throw(InvalidBusinessLogicException("IBAN does not exist, or it is not associated with one of your accounts."));
 
             auto transactions = manager.getTransactionEntity().getAccountTransactions(userAccount.first);
-            vector<string> inboundTransactions, outboundTransactions;
+            vector<pair<time_point<system_clock>, string>> inboundTransactions, outboundTransactions;
             for (const auto &transaction : transactions.first)
-                inboundTransactions.emplace_back("From " + transaction.second.getOutbound().getIBAN() +
-                                                 " recieved " + to_string(transaction.second.getAmount()) +
-                                                 " " + transaction.second.getOutbound().getCurrency().getCode() +
-                                                 " on " + transaction.second.getDate());
+                inboundTransactions.emplace_back(pair<time_point<system_clock>, string>(transaction.second.getDate(),
+                                                                                        "From " + transaction.second.getOutbound().getIBAN() +
+                                                                                            " recieved " + to_string(transaction.second.getAmount()) +
+                                                                                            " " + transaction.second.getOutbound().getCurrency().getCode() +
+                                                                                            " on " + transaction.second.getDateString()));
             for (const auto &transaction : transactions.second)
-                outboundTransactions.emplace_back("To " + transaction.second.getInbound().getIBAN() +
-                                                  " sent " + to_string(transaction.second.getAmount()) +
-                                                  " " + transaction.second.getOutbound().getCurrency().getCode() +
-                                                  " on " + transaction.second.getDate());
+                outboundTransactions.emplace_back(pair<time_point<system_clock>, string>(transaction.second.getDate(),
+                                                                                         "To " + transaction.second.getInbound().getIBAN() +
+                                                                                             " sent " + to_string(transaction.second.getAmount()) +
+                                                                                             " " + transaction.second.getOutbound().getCurrency().getCode() +
+                                                                                             " on " + transaction.second.getDateString()));
 
             cout << endl;
             if (!inboundTransactions.empty())
             {
+                sort(inboundTransactions.begin(), inboundTransactions.end());
                 cout << "Inbound transactions: " << endl;
                 for (const auto &inboundTransaction : inboundTransactions)
-                    cout << inboundTransaction << endl;
+                    cout << inboundTransaction.second << endl;
             }
             if (!outboundTransactions.empty())
             {
+                sort(outboundTransactions.begin(), outboundTransactions.end());
                 cout << endl
                      << "Outbound transactions: " << endl;
                 for (const auto &outboundTransaction : outboundTransactions)
-                    cout << outboundTransaction << endl;
+                    cout << outboundTransaction.second << endl;
             }
             if (inboundTransactions.empty() && outboundTransactions.empty())
                 cout << "There are no transactions associated with this account." << endl;
@@ -369,7 +373,7 @@ namespace interface
         }
 
     public:
-        CLI(string databaseConnectionString, string initializationFilePath) : manager{databaseConnectionString, initializationFilePath}
+        CLI(string databaseConnectionString, string initializationFilePath) : manager{shared_ptr<pqxx::connection>(new pqxx::connection(databaseConnectionString)), initializationFilePath}
         {
             authenticatedUser.first = -1;
             commandMapping.insert(make_pair(Command("clear", "clear terminal", false), [this]()
@@ -434,21 +438,7 @@ namespace interface
                         {
                             mapping.second();
                         }
-                        catch (EntrySynchronizationException const &exception)
-                        {
-                            // may lead to errors down the line
-                            // should be decided on how to handle such exceptions
-                            // cout << exception.what() << endl;
-                        }
-                        catch (EntryNotFoundException const &exception)
-                        {
-                            cout << exception.what() << endl;
-                        }
-                        catch (InvalidBusinessLogicException const &exception)
-                        {
-                            cout << exception.what() << endl;
-                        }
-                        catch (std::exception const &exception)
+                        catch (logic_error const &exception)
                         {
                             cout << exception.what() << endl;
                         }
