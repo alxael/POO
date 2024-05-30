@@ -404,14 +404,15 @@ namespace bank
         Account getOutbound() const { return outbound; }
         void setOutbound(Account newOutbound) { outbound = newOutbound; }
 
-        string getDate() const { return format("{:%F %T}", date); }
+        time_point<system_clock> getDate() const { return date; }
+        string getDateString() const { return std::format("{:%F %T}", date); }
         void setDate(time_point<system_clock> date) { date = date; }
 
         friend ostream &operator<<(ostream &out, const Transaction &transaction)
         {
             string transactionOutput = "Transaction: " + transaction.outbound.getIBAN() + " -> " + transaction.inbound.getIBAN();
             string amountOutput = "Transaction amount: " + to_string(transaction.amount);
-            string dateOutput = "Transaction date: " + transaction.getDate();
+            string dateOutput = "Transaction date: " + transaction.getDateString();
             out << transactionOutput << endl
                 << amountOutput << endl
                 << dateOutput << endl;
