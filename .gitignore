@@ -37,3 +37,6 @@
 # CMake build directory
 build
 vcpkg_installed
+cmake-build-debug
+.idea
+.vscode
